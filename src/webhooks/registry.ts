@@ -19,12 +19,26 @@ import {
 } from './types';
 
 interface RegistryInterface {
-  webhookRegistry: WebhookRegistryEntry[];
+  webhookRegistry: {[topic: string]: WebhookRegistryEntry;};
+
+  /**
+   * Sets the handler for the given topic. If a handler was previously set for the same topic, it will be overridden.
+   *
+   * @param options Paramters to add a handler which are path, topic and webHookHandler
+   */
+  addHandler(options: WebhookRegistryEntry): void;
+
+  /**
+   * Fetches the handler for the given topic. Returns null if no handler was registered.
+   *
+   * @param topic The topic to check
+   */
+  getHandler(topic: string): WebhookRegistryEntry | null;
 
   /**
    * Registers a Webhook Handler function for a given topic.
    *
-   * @param options Parameters to register a handler, including topic, listening address, handler function
+   * @param options Parameters to register a handler, including topic, listening address, delivery method
    */
   register(options: RegisterOptions): Promise<RegisterReturn>;
 
@@ -202,7 +216,15 @@ function buildQuery(
 }
 
 const WebhooksRegistry: RegistryInterface = {
-  webhookRegistry: [],
+  webhookRegistry: {},
+
+  addHandler({path, topic, webhookHandler}: WebhookRegistryEntry): void {
+    WebhooksRegistry.webhookRegistry[topic] = {path, topic, webhookHandler};
+  },
+
+  getHandler(topic: string): WebhookRegistryEntry | null {
+    return topic in WebhooksRegistry.webhookRegistry ? WebhooksRegistry.webhookRegistry[topic] : null;
+  },
 
   async register({
     path,
@@ -210,7 +232,6 @@ const WebhooksRegistry: RegistryInterface = {
     accessToken,
     shop,
     deliveryMethod = DeliveryMethod.Http,
-    webhookHandler,
   }: RegisterOptions): Promise<RegisterReturn> {
     validateDeliveryMethod(deliveryMethod);
     const client = new GraphqlClient(shop, accessToken);
@@ -253,13 +274,6 @@ const WebhooksRegistry: RegistryInterface = {
     } else {
       success = true;
       body = {};
-    }
-
-    if (success) {
-      // Remove this topic from the registry if it is already there
-      WebhooksRegistry.webhookRegistry =
-        WebhooksRegistry.webhookRegistry.filter((item) => item.topic !== topic);
-      WebhooksRegistry.webhookRegistry.push({path, topic, webhookHandler});
     }
 
     return {success, result: body};
@@ -336,12 +350,8 @@ const WebhooksRegistry: RegistryInterface = {
           .digest('base64');
 
         if (ShopifyUtilities.safeCompare(generatedHash, hmac as string)) {
-          const graphqlTopic = (topic as string)
-            .toUpperCase()
-            .replace(/\//g, '_');
-          const webhookEntry = WebhooksRegistry.webhookRegistry.find(
-            (entry) => entry.topic === graphqlTopic,
-          );
+          const graphqlTopic = (topic as string).toUpperCase().replace(/\//g, '_');
+          const webhookEntry = WebhooksRegistry.getHandler(graphqlTopic);
 
           if (webhookEntry) {
             try {
@@ -382,9 +392,12 @@ const WebhooksRegistry: RegistryInterface = {
   },
 
   isWebhookPath(path: string): boolean {
-    return Boolean(
-      WebhooksRegistry.webhookRegistry.find((entry) => entry.path === path),
-    );
+    for (const key in WebhooksRegistry.webhookRegistry) {
+      if (WebhooksRegistry.webhookRegistry[key].path === path) {
+        return true;
+      }
+    }
+    return false;
   },
 };
 

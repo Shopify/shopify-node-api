@@ -10,6 +10,7 @@ and adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 ### Fixed
 
 - Don't include extra params when calculating local hmac [#196](https://github.com/Shopify/shopify-node-api/pull/196)
+- [Breaking] Extract addHandler and getHandler methods out of register [#205](https://github.com/Shopify/shopify-node-api/pull/205)
 
 ## [1.4.0] - 2021-05-21
 
